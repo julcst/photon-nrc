@@ -102,6 +102,8 @@ extension MaterialSystem
         // The renderer may override this for nested dielectrics.
         sd.IoR = 1.f;
 
+        sd.flipEta = false;
+
         return sd;
     }
 }

@@ -41,7 +41,8 @@ public ShadingData loadShadingData(const HitInfo hit, const float3 rayOrigin, co
         materialID = gScene.getMaterialID(sdfGridHit.instanceID);
     }
 #endif
-
+    // v.faceNormalW = -v.faceNormalW; // Invert face normal for photon tracing
+    // v.normalW = -v.normalW;     // Invert shading normal for photon tracing
     ShadingData sd = gScene.materials.prepareShadingData(v, materialID, -rayDir);
     return sd;
 }

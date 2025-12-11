@@ -155,6 +155,7 @@ void rayGen()
         let lod = ExplicitLodTextureSampler(0);
         uint hints = (uint)MaterialInstanceHints::AdjustShadingNormal;
         ShadingData sd = loadShadingData(hit, ray.Origin, ray.Direction);
+        sd.flipEta = true;
         let mi = gScene.materials.getMaterialInstance(sd, lod, hints);
         let bsdfProperties = mi.getProperties(sd);
 

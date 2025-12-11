@@ -54,7 +54,8 @@ struct StandardMaterial : MaterialBase, IMaterial
         StandardBSDFData d = {};
 
         float16_t IoR = header.getIoR();
-        d.eta = sd.frontFacing ? (sd.IoR / IoR) : (IoR / sd.IoR);
+        if (sd.flipEta) d.eta = sd.frontFacing ? (IoR / sd.IoR) : (sd.IoR / IoR);
+        else d.eta = sd.frontFacing ? (sd.IoR / IoR) : (IoR / sd.IoR);
         d.diffuseTransmission = data.diffuseTransmission;
         d.specularTransmission = data.specularTransmission;
         if (d.diffuseTransmission > 0.f || d.specularTransmission > 0.f)
@@ -144,7 +145,8 @@ struct StandardMaterial : MaterialBase, IMaterial
 
         float16_t _IoR = no_diff header.getIoR();
         float IoR = gradIO.getFloat(float(_IoR), StandardMaterialParamLayout.ior);
-        d.eta = sd.frontFacing ? (sd.IoR / IoR) : (IoR / sd.IoR);
+        if (sd.flipEta) d.eta = sd.frontFacing ? (IoR / sd.IoR) : (sd.IoR / IoR);
+        else d.eta = sd.frontFacing ? (sd.IoR / IoR) : (IoR / sd.IoR);
         d.diffuseTransmission = gradIO.getFloat(data.diffuseTransmission, StandardMaterialParamLayout.diffuseTransmission);
         d.specularTransmission = gradIO.getFloat(data.specularTransmission, StandardMaterialParamLayout.specularTransmission);
 

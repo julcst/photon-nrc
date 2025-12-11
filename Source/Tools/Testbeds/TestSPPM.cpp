@@ -231,7 +231,7 @@ int runMain(int argc, char** argv)
 
     // SPPM
     // render(app, graphSPPM(app.getDevice(), false, 0.5f, false), 512);
-    // render(app, graphSPPM(app.getDevice(), false, 0.5f, true), 512);
+    render(app, graphSPPM(app.getDevice(), false, 0.5f, true), 512);
     //render(app, graphSPPM(app.getDevice(), true), 32);
 
     // PhotonNRC
