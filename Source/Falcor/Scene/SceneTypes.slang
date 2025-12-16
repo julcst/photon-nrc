@@ -51,6 +51,10 @@ struct GeometryInstanceID
     uint index;             ///< Global instance index. This is computed as InstanceID() + GeometryIndex().
 
 #ifndef HOST_CODE
+    __init(uint index) {
+        this.index = index;
+    }
+    
     /** Construct a geometry instance ID.
         \param[in] instanceID The DXR InstanceID() system value.
         \param[in] geometryIndex The DXR GeometryIndex() system value.
