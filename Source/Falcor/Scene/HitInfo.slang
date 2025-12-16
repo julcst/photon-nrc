@@ -91,6 +91,8 @@ struct GeometryHit
 */
 struct TriangleHit : GeometryHit
 {
+    __init();
+
     __init(const PackedHitInfo packed)
     {
 #if SCENE_HAS_GEOMETRY_TYPE(GEOMETRY_TYPE_TRIANGLE_MESH)
@@ -132,6 +134,8 @@ struct DisplacedTriangleHit : GeometryHit
 {
     float displacement;
 
+    __init();
+
     __init(const PackedHitInfo packed)
     {
 #if SCENE_HAS_GEOMETRY_TYPE(GEOMETRY_TYPE_DISPLACED_TRIANGLE_MESH)
@@ -166,6 +170,8 @@ struct DisplacedTriangleHit : GeometryHit
 */
 struct CurveHit : GeometryHit
 {
+    __init();
+
     __init(const PackedHitInfo packed)
     {
 #if SCENE_HAS_GEOMETRY_TYPE(GEOMETRY_TYPE_CURVE)
@@ -200,6 +206,8 @@ struct SDFGridHit
 {
     GeometryInstanceID instanceID;
     SDFGridHitData hitData;
+
+    __init();
 
     __init(const PackedHitInfo packed)
     {
