@@ -103,6 +103,27 @@ struct PathState
     InteriorList interiorList;          ///< Interior list. Keeping track of a stack of materials with medium properties.
     SampleGenerator sg;                 ///< Sample generator state. Typically 4-16B.
 
+    __init() {
+        id = {};
+        flagsAndVertexIndex = {};
+        rejectedHits = {};
+        sceneLength = {};
+        bounceCounters = {};
+
+        origin = {};
+        dir = {};
+        pdf = {};
+        normal = {};
+        hit = {};
+
+        thp = {};
+        L = {};
+
+        guideData = {};
+        interiorList = {};
+        sg = {};
+    }
+
     // Accessors
 
     bool isTerminated() { return !isActive(); }
