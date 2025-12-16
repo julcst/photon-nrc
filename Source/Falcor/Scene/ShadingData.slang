@@ -65,7 +65,22 @@ struct ShadingData : IDifferentiable
     uint geometryGradOffset;            ///< Offset to the geometry gradient in the gradient buffer.
     uint threadID;                      ///< Thread ID for gradient aggregation with a hash grid.
 
-    __init();
+    __init() {
+        posW = {};
+        V = {};
+        uv = {};
+        frame = {{},{}};
+        faceN = {};
+        tangentW = {};
+        frontFacing = {};
+        curveRadius = {};
+        mtl = {};
+        materialID = {};
+        IoR = {};
+        materialGradOffset = {};
+        geometryGradOffset = {};
+        threadID = {};
+    }
 
 
     // Utility functions

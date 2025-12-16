@@ -91,7 +91,9 @@ struct GeometryHit
 */
 struct TriangleHit : GeometryHit
 {
-    __init();
+    __init() {
+        barycentrics = {};
+    }
 
     __init(const PackedHitInfo packed)
     {
@@ -134,7 +136,10 @@ struct DisplacedTriangleHit : GeometryHit
 {
     float displacement;
 
-    __init();
+    __init() {
+        barycentrics = {};
+        displacement = {};
+    }
 
     __init(const PackedHitInfo packed)
     {
@@ -170,7 +175,9 @@ struct DisplacedTriangleHit : GeometryHit
 */
 struct CurveHit : GeometryHit
 {
-    __init();
+    __init() {
+        barycentrics = {};
+    }
 
     __init(const PackedHitInfo packed)
     {
@@ -207,7 +214,10 @@ struct SDFGridHit
     GeometryInstanceID instanceID;
     SDFGridHitData hitData;
 
-    __init();
+    __init() {
+        instanceID = {{}};
+        hitData = {};
+    }
 
     __init(const PackedHitInfo packed)
     {

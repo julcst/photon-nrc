@@ -71,7 +71,20 @@ struct StandardBSDFData : IDifferentiable
     bool hasEntryPointVolumeProperties; ///< Flag that specifies from where sigmaA is taken from (volume or surface).
     bool hasSigmaSGreaterZero;          ///< Flag that indicates if we have to do albedo conversion
 
-    __init();
+    __init() {
+        diffuse = {};
+        specular = {};
+        roughness = {};
+        metallic = {};
+        eta = {};
+        transmission = {};
+        diffuseTransmission = {};
+        specularTransmission = {};
+        volumeScattering = {};
+        volumeAnsiotropy = {};
+        hasEntryPointVolumeProperties = {};
+        hasSigmaSGreaterZero = {};
+    }
 
     [Differentiable]
     __init(const DiffMaterialData diffData)
