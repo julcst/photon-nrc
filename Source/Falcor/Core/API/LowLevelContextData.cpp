@@ -44,8 +44,7 @@ LowLevelContextData::LowLevelContextData(Device* pDevice, gfx::ICommandQueue* pQ
     mpFence->breakStrongReferenceToDevice();
 
 #if FALCOR_HAS_CUDA
-    // GFX currently doesn't support shared fences on Vulkan.
-    if (mpDevice->getType() == Device::Type::D3D12)
+    if (mpDevice->getType() == Device::Type::D3D12 || mpDevice->getType() == Device::Type::Vulkan)
     {
         mpDevice->initCudaDevice();
         mpCudaFence = mpDevice->createFence(true);

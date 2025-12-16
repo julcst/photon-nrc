@@ -55,6 +55,7 @@ enum class NativeHandleType
     VkBufferView,
     VkPipeline,
     VkFence,
+    VkSemaphore,
     VkQueue,
     VkCommandBuffer,
     VkSampler,

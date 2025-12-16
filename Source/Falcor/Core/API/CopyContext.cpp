@@ -109,31 +109,13 @@ void CopyContext::wait(Fence* pFence, uint64_t value)
 #if FALCOR_HAS_CUDA
 void CopyContext::waitForCuda(cudaStream_t stream)
 {
-    if (mpDevice->getType() == Device::Type::D3D12)
-    {
-        mpLowLevelData->getCudaSemaphore()->waitForCuda(this, stream);
-    }
-    else
-    {
-        // In the past, we used to wait for all CUDA work to be done.
-        // Since GFX with Vulkan doesn't support shared fences yet, we do the same here.
-        cuda_utils::deviceSynchronize();
-    }
+    mpLowLevelData->getCudaSemaphore()->waitForCuda(this, stream);
 }
 
 void CopyContext::waitForFalcor(cudaStream_t stream)
 {
-    if (mpDevice->getType() == Device::Type::D3D12)
-    {
-        mpLowLevelData->submitCommandBuffer();
-        mpLowLevelData->getCudaSemaphore()->waitForFalcor(this, stream);
-    }
-    else
-    {
-        // In the past, we used to wait for all work on the command queue to be done.
-        // Since GFX with Vulkan doesn't support shared fences yet, we do the same here.
-        submit(true);
-    }
+    mpLowLevelData->submitCommandBuffer();
+    mpLowLevelData->getCudaSemaphore()->waitForFalcor(this, stream);
 }
 #endif
 

@@ -81,6 +81,7 @@ FALCOR_NATIVE_HANDLE(VkBuffer, NativeHandleType::VkBuffer);
 FALCOR_NATIVE_HANDLE(VkBufferView, NativeHandleType::VkBufferView);
 FALCOR_NATIVE_HANDLE(VkPipeline, NativeHandleType::VkPipeline);
 FALCOR_NATIVE_HANDLE(VkFence, NativeHandleType::VkFence);
+FALCOR_NATIVE_HANDLE(VkSemaphore, NativeHandleType::VkSemaphore);
 FALCOR_NATIVE_HANDLE(VkQueue, NativeHandleType::VkQueue);
 FALCOR_NATIVE_HANDLE(VkCommandBuffer, NativeHandleType::VkCommandBuffer);
 FALCOR_NATIVE_HANDLE(VkSampler, NativeHandleType::VkSampler);

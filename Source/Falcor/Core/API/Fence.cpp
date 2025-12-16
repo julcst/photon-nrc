@@ -91,7 +91,8 @@ NativeHandle Fence::getNativeHandle() const
         return NativeHandle(reinterpret_cast<ID3D12Fence*>(gfxNativeHandle.handleValue));
 #endif
 #if FALCOR_HAS_VULKAN
-        // currently not supported
+    if (mpDevice->getType() == Device::Type::Vulkan)
+        return NativeHandle(reinterpret_cast<VkSemaphore>(gfxNativeHandle.handleValue));
 #endif
     return {};
 }
