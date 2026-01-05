@@ -482,6 +482,28 @@ float evalPhotonTargetPdf(
     return luminance(contribution);
 }
 
+// Helper: Evaluate query BSDF for incoming direction
+float3 evalQueryBsdf(
+    ShadingData sdQuery,
+    IMaterialInstance miQuery,
+    float3 wi,
+    inout SampleGenerator sg)
+{
+    // Check grazing angle at query
+    if (abs(dot(wi, sdQuery.getOrientedFaceNormal())) < 1e-3f) return float3(0.f);
+    return miQuery.eval(sdQuery, wi, sg);
+}
+
+// Helper: Evaluate photon BSDF for outgoing direction (towards query)
+float3 evalPhotonBsdf(
+    ShadingData sdPhoton,
+    IMaterialInstance miPhoton,
+    float3 wo,
+    inout SampleGenerator sg)
+{
+    return miPhoton.eval(sdPhoton, wo, sg);
+}
+
 // Evaluate target PDF for light source (0-vertex) using full BSDF
 float evalLightTargetPdf(
     ShadingData sdQuery,
@@ -582,6 +604,7 @@ void rayGenReservoir()
     RayDesc ray = ls.getRay().toRayDesc();
     float3 photonFlux = ls.flux;
 
+    // Load query shading data once per thread
     let sdQuery = loadShadingData(query.getHitInfo(), query.position, -query.getViewDir());
     let miQuery = gScene.materials.getMaterialInstance(sdQuery, ExplicitLodTextureSampler(0));
 
@@ -590,6 +613,7 @@ void rayGenReservoir()
     const uint subwarpID = laneIndex / gSubwarpSize;
     const uint subwarpBase = subwarpID * gSubwarpSize;
     const uint subwarpEnd = min(subwarpBase + gSubwarpSize, WaveGetLaneCount());
+    const uint subwarpLaneIndex = laneIndex - subwarpBase;
 
     // ===== Resampling for 0-vertex (direct light) =====
     Reservoir<uint> lightReservoir;
@@ -632,41 +656,77 @@ void rayGenReservoir()
         HitInfo hit = HitInfo(rayPayload.packedHitInfo);
         photonValid = hit.isValid();
         
-        // Store local photon data for broadcasting
-        PhotonVertex localPhoton;
-        localPhoton.packedHit = rayPayload.packedHitInfo;
-        localPhoton.flux = photonFlux;
-        localPhoton.rayOrigin = ray.Origin;
-        localPhoton.rayDir = ray.Direction;
+        // Store compact photon data for shuffling
+        float3 localPhotonPos = float3(0.f);
+        float3 localPhotonNormal = float3(0.f);
+        float3 localPhotonFlux = float3(0.f);
         
-        // ===== Resampling across subwarp photons =====
-        Reservoir<uint> photonReservoir;
-        let mask = WaveActiveBallot(photonValid).x;
-        for (uint lane = subwarpBase; lane < subwarpEnd; lane++)
+        // Load photon shading data ONCE per thread if valid
+        ShadingData sdPhoton;
+        IMaterialInstance miPhoton;
+        if (photonValid)
         {
-            if ((mask & (1u << lane)) == 0) continue; // Check if lane has invalid photon
-            // Broadcast photon data from lane
-            PhotonVertex photon;
-            photon.packedHit = WaveReadLaneAt(localPhoton.packedHit, lane);
-            photon.flux = WaveReadLaneAt(localPhoton.flux, lane);
-            photon.rayOrigin = WaveReadLaneAt(localPhoton.rayOrigin, lane);
-            photon.rayDir = WaveReadLaneAt(localPhoton.rayDir, lane);
+            sdPhoton = loadShadingData(hit, ray.Origin, ray.Direction);
+            localPhotonPos = sdPhoton.posW;
+            localPhotonNormal = sdPhoton.getOrientedFaceNormal();
+            localPhotonFlux = photonFlux;
+            miPhoton = gScene.materials.getMaterialInstance(sdPhoton, ExplicitLodTextureSampler(0));
+        }
+        
+        // ===== Optimized Resampling with Minimal Shuffling =====
+        Reservoir<uint> photonReservoir;
+        let validMask = WaveActiveBallot(photonValid).x;
+        
+        // Loop over all shifts to construct PDFs for all photon-query pairs
+        for (uint shift = 0; shift < gSubwarpSize; shift++)
+        {
+            // Determine source lanes for this shift
+            // For shift=0: current thread's query connects to current thread's photon
+            // For shift=1: current thread's query connects to next thread's photon (i+1)
+            uint photonLane = (subwarpLaneIndex + shift) % gSubwarpSize + subwarpBase;
+            uint queryLane = (subwarpLaneIndex + gSubwarpSize - shift) % gSubwarpSize + subwarpBase;
             
-            if (photon.isValid())
-            {
-                // Reconstruct shading data for target PDF evaluation
-                HitInfo photonHit = HitInfo(photon.packedHit);
-                let sdPhoton = loadShadingData(photonHit, photon.rayOrigin, photon.rayDir);
-                let miPhoton = gScene.materials.getMaterialInstance(sdPhoton, ExplicitLodTextureSampler(0));
-                
-                // Evaluate target PDF using full combined BSDFs (unshadowed contribution)
-                float targetPdf = evalPhotonTargetPdf(
-                    sdQuery, miQuery,
-                    sdPhoton, miPhoton,
-                    photon.flux,
-                    sg);
-                
-                photonReservoir.update(lane, targetPdf, sg);
+            // Skip if photon lane is invalid or out of bounds
+            if (photonLane >= subwarpEnd) continue;
+            if ((validMask & (1u << photonLane)) == 0) continue;
+            
+            // Shuffle query position and normal from thread that owns this query
+            float3 queryPos = WaveReadLaneAt(sdQuery.posW, queryLane);
+            float3 queryNormal = WaveReadLaneAt(sdQuery.getOrientedFaceNormal(), queryLane);
+            
+            // Shuffle photon position, normal, and flux from thread that owns this photon
+            float3 photonPos = WaveReadLaneAt(localPhotonPos, photonLane);
+            float3 photonNormal = WaveReadLaneAt(localPhotonNormal, photonLane);
+            float3 photonFlux = WaveReadLaneAt(localPhotonFlux, photonLane);
+            
+            // Calculate direction and geometry
+            float3 toPhoton = photonPos - queryPos;
+            float dist2 = dot(toPhoton, toPhoton);
+            if (dist2 < 1e-6f) continue;
+            
+            float dist = sqrt(dist2);
+            float3 wi = toPhoton / dist; // Direction from query to photon
+            float geometry = 1.f / dist2;
+            
+            // Check grazing angle at query
+            if (abs(dot(wi, queryNormal)) < 1e-3f) continue;
+            
+            // Current thread evaluates its own query BSDF if it owns this query
+            float3 queryBsdf = evalQueryBsdf(sdQuery, miQuery, wi, sg);
+            
+            // Current thread evaluates its own photon BSDF if it owns this photon
+            float3 photonBsdf = float3(0.f);
+            if (photonValid) photonBsdf = evalPhotonBsdf(sdPhoton, miPhoton, -wi, sg);
+            // Shuffle photon BSDF to thread that need it
+            photonBsdf = WaveReadLaneAt(photonBsdf, photonLane);
+            
+            // All threads now have all data: compute target PDF
+            float3 contribution = photonFlux * queryBsdf * photonBsdf * geometry;
+            float targetPdf = luminance(contribution);
+            
+            // Only the query owner updates its reservoir
+            if (targetPdf > 0.f) {
+                photonReservoir.update(photonLane, targetPdf, sg);
             }
         }
         
@@ -677,10 +737,10 @@ void rayGenReservoir()
             
             // Broadcast selected photon data
             PhotonVertex selectedPhoton;
-            selectedPhoton.packedHit = WaveReadLaneAt(localPhoton.packedHit, selectedLane);
-            selectedPhoton.flux = WaveReadLaneAt(localPhoton.flux, selectedLane);
-            selectedPhoton.rayOrigin = WaveReadLaneAt(localPhoton.rayOrigin, selectedLane);
-            selectedPhoton.rayDir = WaveReadLaneAt(localPhoton.rayDir, selectedLane);
+            selectedPhoton.packedHit = WaveReadLaneAt(hit.pack(), selectedLane);
+            selectedPhoton.flux = WaveReadLaneAt(localPhotonFlux, selectedLane);
+            selectedPhoton.rayOrigin = WaveReadLaneAt(ray.Origin, selectedLane);
+            selectedPhoton.rayDir = WaveReadLaneAt(ray.Direction, selectedLane);
             
             // Reconstruct full shading data for contribution evaluation
             HitInfo photonHit = HitInfo(selectedPhoton.packedHit);
