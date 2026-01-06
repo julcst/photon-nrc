@@ -19,21 +19,25 @@ struct DebugCounters
 // Reset every frame
 struct Accumulator {
     float3 flux;
-    uint collectedPhotons; // Optimal 16 byte alignment
+    uint16_t collectedPhotons;
+    uint16_t rejectedPhotons; // Optimal 16 byte alignment
 #ifndef HOST_CODE
     __init() {
         flux = float3(0.0f);
+        rejectedPhotons = 0u;
         collectedPhotons = 0u;
     }
 
     __init(uint4 raw) {
         flux = asfloat(raw.xyz);
-        collectedPhotons = raw.w;
+        collectedPhotons = uint16_t((raw.w >> 16) & 0xFFFF);
+        rejectedPhotons = uint16_t(raw.w & 0xFFFF);
     }
 
     __init(float3 flux, uint collectedPhotons) {
         this.flux = flux;
-        this.collectedPhotons = collectedPhotons;
+        this.collectedPhotons = uint16_t(collectedPhotons);
+        this.rejectedPhotons = 0u;
     }
 #endif
 };
@@ -53,7 +57,7 @@ struct QueryState {
     float causticCollectedPhotons;
 
     uint totalPhotonCountAtBirth;
-    float globalRadius; // TODO: Maintain separate radius for caustics
+    float globalRadius;
     float causticRadius;
     uint revision; // To identify changes
 
@@ -71,7 +75,13 @@ struct QueryState {
 
     [mutating]
     void applyRadiusReductionGlobal(Accumulator acc, float alpha) {
+        let totalPhotons = globalCollectedPhotons + float(acc.collectedPhotons);
+        if (totalPhotons > 0.0f) { // For rejected photons, add average flux
+            acc.flux += (acc.flux + globalFlux) * float(acc.rejectedPhotons) / totalPhotons;
+            acc.collectedPhotons += acc.rejectedPhotons;
+        }
         if (acc.collectedPhotons == 0u) return; // No photons collected, no radius reduction needed
+        // acc.flux *= float(acc.collectedPhotons + acc.rejectedPhotons) / float(acc.collectedPhotons);
         const float newCollectedPhotons = globalCollectedPhotons + float(acc.collectedPhotons) * alpha;
         const float factor = newCollectedPhotons / (globalCollectedPhotons + float(acc.collectedPhotons));
         globalCollectedPhotons = newCollectedPhotons;
@@ -82,7 +92,13 @@ struct QueryState {
 
     [mutating]
     void applyRadiusReductionCaustic(Accumulator acc, float alpha) {
+        let totalPhotons = causticCollectedPhotons + float(acc.collectedPhotons);
+        if (totalPhotons > 0.0f) { // For rejected photons, add average flux
+            acc.flux += (acc.flux + causticFlux) * float(acc.rejectedPhotons) / totalPhotons;
+            acc.collectedPhotons += acc.rejectedPhotons;
+        }
         if (acc.collectedPhotons == 0u) return; // No photons collected, no radius reduction needed
+        // acc.flux *= float(acc.collectedPhotons + acc.rejectedPhotons) / float(acc.collectedPhotons);
         const float newCollectedPhotons = causticCollectedPhotons + float(acc.collectedPhotons) * alpha;
         const float factor = newCollectedPhotons / (causticCollectedPhotons + float(acc.collectedPhotons));
         causticCollectedPhotons = newCollectedPhotons;

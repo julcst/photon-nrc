@@ -62,16 +62,6 @@ void queryAnyHit(inout StochQuerySearchPayload pl : SV_RayPayload, in QueryIsect
     if (!attribs.sphere.contains(WorldRayOrigin(), pl.isCaustic)) IgnoreHit();
 
     let qi = PrimitiveIndex();
-    let q = gPhotonQueries[qi];
-
-#if NORMAL_REJECTION
-    let N = WorldRayDirection(); // Encoded normal
-    if (abs(dot(q.getNormal(), N)) < gMaxNormalDeviation) IgnoreHit();
-#endif
-#if INSTANCE_REJECTION
-    let hit = q.getHitInfo();
-    if (hit.getInstanceID().index != pl.geomID) IgnoreHit();
-#endif
 
     pl.queryReservoir.addSample(qi, pl.sg);
     // Count accumulation event (per hit processed)
@@ -109,7 +99,8 @@ void rayGen()
 
         let wo = q.getViewDir();
 
-        let th = HitInfo(q.hit).getTriangleHit();
+        let hit = q.getHitInfo();
+        let th = hit.getTriangleHit();
         let materialID = gScene.getMaterialID(th.instanceID);
         let v = gScene.getVertexData(th);
         let sd = gScene.materials.prepareShadingData(v, materialID, wo);
@@ -118,10 +109,25 @@ void rayGen()
         let N = mi.getProperties(sd).guideNormal; // TODO: guideN or faceN?
         var cosThetaI = abs(dot(wi, N));
         if (cosThetaI < 1e-6) continue;
+
         let outgoing_flux = (flux * mi.eval(sd, wi, sg)) * res.getWeight() / cosThetaI;
         if (luminance(outgoing_flux) < 1e-5) continue; // Skip expensive atomic ops for negligible contributions
+        
+        let offset = qi * sizeof(DoubleAccumulator) + (ph.isCaustic ? sizeof(Accumulator) : 0);
 
-        let offset = qi * sizeof(DoubleAccumulator) + (ph.isCaustic ? sizeof(float4) : 0);
+    #if NORMAL_REJECTION
+        if (abs(dot(q.getNormal(), N)) < gMaxNormalDeviation) {
+            gQueryAccumulation.InterlockedAdd(offset + 3 * sizeof(float), 1<<16); // Count as rejected
+            continue;
+        }
+    #endif
+    #if INSTANCE_REJECTION
+        if (hit.getInstanceID().index != ph.geomID) {
+            gQueryAccumulation.InterlockedAdd(offset + 3 * sizeof(float), 1<<16); // Count as rejected
+            continue;
+        }
+    #endif
+        
         gQueryAccumulation.InterlockedAddF32(offset + 0 * sizeof(float), outgoing_flux.x);
         gQueryAccumulation.InterlockedAddF32(offset + 1 * sizeof(float), outgoing_flux.y);
         gQueryAccumulation.InterlockedAddF32(offset + 2 * sizeof(float), outgoing_flux.z);
