@@ -1,6 +1,6 @@
-![](docs/images/teaser.webm)
-
 # PhotonNRC
+
+![](docs/images/teaser.gif)
 
 This repo contains the source code for our paper [Photon-Driven Neural Radiance Caching](https://cg.cs.uni-bonn.de/publications/stamm-2026-photon).
 The framework is forked from [Falcor](https://github.com/nvidiagameworks/falcor), see there for installation instructions.
