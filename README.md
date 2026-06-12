@@ -1,121 +1,49 @@
-![](docs/images/teaser.png)
+![](docs/images/teaser.webm)
 
-# Falcor
+# PhotonNRC
 
-Falcor is a real-time rendering framework supporting DirectX 12 and Vulkan. It aims to improve productivity of research and prototype projects.
+This repo contains the source code for our paper [Photon-Driven Neural Radiance Caching](https://cg.cs.uni-bonn.de/publications/stamm-2026-photon).
+The framework is forked from [Falcor](https://github.com/nvidiagameworks/falcor), see there for installation instructions.
+Because the code uses tiny-cuda-nn and heavily utilizes raytracing and tensor hardware, a recent NVIDIA GPU is required to run it.
 
-Features include:
-* Abstracting many common graphics operations, such as shader compilation, model loading, and scene rendering
-* Raytracing support
-* Python scripting support
-* Render graph system to build modular renderers
-* Common rendering techniques such post-processing effects
-* Unbiased path tracer
-* Integration of various RTX SDKs such as DLSS, RTXDI and NRD
+## Renderpasses
+We provide various custom render passes for Neural Radiance Caching, Photon Mapping and the combination of both:
 
-## Prerequisites
-- Windows 10 version 20H2 (October 2020 Update) or newer, OS build revision .789 or newer
-- Visual Studio 2022
-- [Windows 10 SDK (10.0.19041.0) for Windows 10, version 2004](https://developer.microsoft.com/en-us/windows/downloads/windows-10-sdk/)
-- A GPU which supports DirectX Raytracing, such as the NVIDIA Titan V or GeForce RTX
-- NVIDIA driver 466.11 or newer
+Pass | Description
+--- | ---
+[AccumulatePhotonsRTX](Source/RenderPasses/AccumulatePhotonsRTX) | Uses hardware accelerated BVH traversal and stochastic reservoirs to perform high performance inverse radius search for photon mapping. More details in the linked paper; Based on [Kern et al.](https://jcgt.org/published/0012/01/01/paper.pdf)
+[DebugQueryBuffer](Source/RenderPasses/DebugQueryBuffer) | Writes query position/normal/etc from a buffer to a texture for debugging purposes.
+[NRC](Source/RenderPasses/NRC) | Takes a buffer with inference and training queries and performs the online update and inference step of the [Neural Radiance Cache](https://research.nvidia.com/publication/2021-06_real-time-neural-radiance-caching-path-tracing). Based on [tiny-cuda-nn](https://github.com/nvlabs/tiny-cuda-nn)
+[PathTracerQuery](Source/RenderPasses/PathTracerQuery) | A tweaked version of [PathTracer](Source/RenderPasses/PathTracer) that allows for multisampling and storing into buffers
+[QuerySubsampling](Source/RenderPasses/QuerySubsampling) | Draws a random subsample of a query buffer to be used for training; Also handles query caching.
+[TracePhotons](Source/RenderPasses/TracePhotons) | Traces photons from light sources and emits photon position/normal/etc into a buffer.
+[TraceQueries](Source/RenderPasses/TraceQueries) | Traces queries from the camer and emits query position/normal/etc into a buffer.
+[VisualizePhotons](Source/RenderPasses/VisualizePhotons) | Visualizes photons as pixels for debug purposes
+[VisualizeQueries](Source/RenderPasses/VisualizeQueries) | Visualizes photon queries as disk for debug purposes
 
-Optional:
-- Windows 10 Graphics Tools. To run DirectX 12 applications with the debug layer enabled, you must install this. There are two ways to install it:
-    - Click the Windows button and type `Optional Features`, in the window that opens click `Add a feature` and select `Graphics Tools`.
-    - Download an offline package from [here](https://docs.microsoft.com/en-us/windows-hardware/test/hlk/windows-hardware-lab-kit#supplemental-content-for-graphics-media-and-mean-time-between-failures-mtbf-tests). Choose a ZIP file that matches the OS version you are using (not the SDK version used for building Falcor). The ZIP includes a document which explains how to install the graphics tools.
-- NVAPI, CUDA, OptiX (see below)
+## Scripts
+The benchmarks from the paper are implemented in [Source/Testbeds/PhotonNRCPaper.cpp](Source/Testbeds/PhotonNRCPaper.cpp).
+We also provide a [Mogwai script](scripts/PhotonNRCPaper.py) for running the different NRC flavors.
 
-## Building Falcor
-Falcor uses the [CMake](https://cmake.org) build system. Additional information on how to use Falcor with CMake is available in the [CMake](docs/development/cmake.md) development documetation page.
-
-### Visual Studio
-If you are working with Visual Studio 2022, you can setup a native Visual Studio solution by running `setup_vs2022.bat` after cloning this repository. The solution files are written to `build/windows-vs2022` and the binary output is located in `build/windows-vs2022/bin`.
-
-### Visual Studio Code
-If you are working with Visual Studio Code, run `setup.bat` after cloning this repository. This will setup a VS Code workspace in the `.vscode` folder with sensible defaults (only if `.vscode` does not exist yet). When opening the project folder in VS Code, it will prompt to install recommended extensions. We recommend you do, but at least make sure that _CMake Tools_ is installed. To build Falcor, you can select the configure preset by executing the _CMake: Select Configure Preset_ action (Ctrl+Shift+P). Choose the _Windows Ninja/MSVC_ preset. Then simply hit _Build_ (or press F7) to build the project. The binary output is located in `build/windows-ninja-msvc/bin`.
-
-Warning: Do not start VS Code from _Git Bash_, it will modify the `PATH` environment variable to an incompatible format, leading to issues with CMake.
-
-### Linux
-Falcor has experimental support for Ubuntu 22.04. To build Falcor on Linux, run `setup.sh` after cloning this repository. You also need to install some system library headers using:
-
-```
-sudo apt install xorg-dev libgtk-3-dev
-```
-
-You can use the same instructions for building Falcor as described in the _Visual Studio Code_ section above, simply choose the _Linux/GCC_ preset.
-
-### Configure Presets
-Falcor uses _CMake Presets_ store in `CMakePresets.json` to provide a set of commonly used build configurations. You can get the full list of available configure presets running `cmake --list-presets`:
-
-```
-$ cmake --list-presets
-Available configure presets:
-
-  "windows-vs2022"           - Windows VS2022
-  "windows-ninja-msvc"       - Windows Ninja/MSVC
-  "linux-clang"              - Linux Ninja/Clang
-  "linux-gcc"                - Linux Ninja/GCC
-```
-
-Use `cmake --preset <preset name>` to generate the build tree for a given preset. The build tree is written to the `build/<preset name>` folder and the binary output files are in `build/<preset name>/bin`.
-
-An existing build tree can be compiled using `cmake --build build/<preset name>`.
-
-## Falcor In Python
-For more information on how to use Falcor as a Python module see [Falcor In Python](docs/falcor-in-python.md).
-
-## Microsoft DirectX 12 Agility SDK
-Falcor uses the [Microsoft DirectX 12 Agility SDK](https://devblogs.microsoft.com/directx/directx12agility/) to get access to the latest DirectX 12 features. Applications can enable the Agility SDK by putting `FALCOR_EXPORT_D3D12_AGILITY_SDK` in the main `.cpp` file. `Mogwai`, `FalcorTest` and `RenderGraphEditor` have the Agility SDK enabled by default.
-
-## NVAPI
-To enable NVAPI support, head over to https://developer.nvidia.com/nvapi and download the latest version of NVAPI (this build is tested against version R535).
-Extract the content of the zip file into `external/packman/` and rename `R535-developer` to `nvapi`.
-
-## NSight Aftermath
-To enable NSight Aftermath support, head over to https://developer.nvidia.com/nsight-aftermath and download the latest version of Aftermath (this build is tested against version 2023.1).
-Extract the content of the zip file into `external/packman/aftermath`.
-
-## CUDA
-To enable CUDA support, download and install [CUDA 11.6.2](https://developer.nvidia.com/cuda-11-6-2-download-archive) or later and reconfigure the build.
-
-See the `CudaInterop` sample application located in `Source/Samples/CudaInterop` for an example of how to use CUDA.
-
-## OptiX
-If you want to use Falcor's OptiX functionality (specifically the `OptixDenoiser` render pass) download the [OptiX SDK](https://developer.nvidia.com/designworks/optix/download) (Falcor is currently tested against OptiX version 7.3) After running the installer, link or copy the OptiX SDK folder into `external/packman/optix` (i.e., file `external/packman/optix/include/optix.h` should exist).
-
-Note: You also need CUDA installed to compile the `OptixDenoiser` render pass, see above for details.
-
-## NVIDIA RTX SDKs
-Falcor ships with the following NVIDIA RTX SDKs:
-
-- DLSS (https://github.com/NVIDIA/DLSS)
-- RTXDI (https://github.com/NVIDIAGameWorks/RTXDI)
-- NRD (https://github.com/NVIDIAGameWorks/RayTracingDenoiser)
-
-Note that these SDKs are not under the same license as Falcor, see [LICENSE.md](LICENSE.md) for details.
-
-## Resources
-- [Falcor](https://github.com/NVIDIAGameWorks/Falcor): Falcor's GitHub page.
-- [Documentation](./docs/index.md): Additional information and tutorials.
-    - [Getting Started](./docs/getting-started.md)
-    - [Render Graph Tutorials](./docs/tutorials/index.md)
-- [Rendering Resources](https://benedikt-bitterli.me/resources) A collection of scenes loadable in Falcor (pbrt-v4 format).
-- [ORCA](https://developer.nvidia.com/orca): A collection of scenes and assets optimized for Falcor.
-- [Slang](https://github.com/shader-slang/slang): Falcor's shading language and compiler.
+Code was developed and tested on Linux on an RTX 5070 Ti.
 
 ## Citation
-If you use Falcor in a research project leading to a publication, please cite the project.
+If you build on this repo in your research, please cite our paper.
 The BibTex entry is
 
 ```bibtex
-@Misc{Kallweit22,
-   author =      {Simon Kallweit and Petrik Clarberg and Craig Kolb and Tom{'a}{\v s} Davidovi{\v c} and Kai-Hwa Yao and Theresa Foley and Yong He and Lifan Wu and Lucy Chen and Tomas Akenine-M{\"o}ller and Chris Wyman and Cyril Crassin and Nir Benty},
-   title =       {The {Falcor} Rendering Framework},
-   year =        {2022},
-   month =       {8},
-   url =         {https://github.com/NVIDIAGameWorks/Falcor},
-   note =        {\url{https://github.com/NVIDIAGameWorks/Falcor}}
+@inproceedings{stamm2026photon,
+  author    = {Stamm, Julian C. and Kneiphof, Tom and Klein, Reinhard},
+  title     = {Photon-Driven Neural Radiance Caching},
+  booktitle = {Companion Proceedings of the Symposium on Interactive 3D Graphics and Games (I3D Companion '26)},
+  year      = {2026},
+  month     = {5},
+  pages     = {3},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  doi       = {10.1145/3807895.3807923},
+  isbn      = {979-8-4007-2667-5/2026/05},
+  location  = {San Francisco, CA, USA},
+  keywords  = {real-time, global illumination, radiance caching, photon mapping}
 }
 ```
